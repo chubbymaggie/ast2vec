@@ -5,7 +5,7 @@ from scipy.sparse import csr_matrix
 from ast2vec.bow import NBOW
 from ast2vec.df import DocumentFrequencies
 from ast2vec.id2vec import Id2Vec
-from ast2vec.model2.source2bow import Uasts2BOW
+from ast2vec.model2.uast2bow import Uasts2BOW
 from ast2vec.repo2.base import RepoTransformer, Repo2Base, repos2_entry, repo2_entry
 from modelforge.backends import create_backend
 
@@ -17,7 +17,7 @@ class Repo2nBOW(Repo2Base):
     MODEL_CLASS = NBOW
 
     def __init__(self, id2vec, docfreq, **kwargs):
-        super(Repo2nBOW, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self._uasts2bow = Uasts2BOW(id2vec, docfreq, lambda x: x.response.uast)
 
     def convert_uasts(self, file_uast_generator):
@@ -37,7 +37,10 @@ class Repo2nBOWTransformer(RepoTransformer):
             backend = None
         self._id2vec = kwargs["id2vec"] = Id2Vec().load(id2vec or None, backend=backend)
         self._df = kwargs["docfreq"] = DocumentFrequencies().load(docfreq or None, backend=backend)
-        super(Repo2nBOWTransformer, self).__init__(**kwargs)
+        prune_df = kwargs.pop("prune_df", 1)
+        if prune_df > 1:
+            self._df = self._df.prune(prune_df)
+        super().__init__(**kwargs)
 
     def dependencies(self):
         return self._df, self._id2vec

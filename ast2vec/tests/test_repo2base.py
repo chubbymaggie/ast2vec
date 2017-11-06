@@ -1,5 +1,6 @@
 from collections import namedtuple
 import logging
+import math
 import multiprocessing
 import os
 import tempfile
@@ -9,7 +10,9 @@ from ast2vec.cloning import RepoCloner
 import ast2vec.tests as tests
 import ast2vec.repo2.base
 from ast2vec.repo2.base import BblfshFailedError, Repo2Base, RepoTransformer, \
-    ensure_bblfsh_is_running_noexc
+    ensure_bblfsh_is_running_noexc, DEFAULT_BBLFSH_ENDPOINTS, resolve_bblfsh_endpoint, \
+    DEFAULT_BBLFSH_TIMEOUT, resolve_bblfsh_timeout, resolve_parse_log_filename, parse_parse_logs,\
+    lines_count
 
 
 class Repo2BaseTests(unittest.TestCase):
@@ -31,7 +34,7 @@ class Repo2BaseTests(unittest.TestCase):
         self.base.tempdir = None
 
     def test_bblfsh_endpoint(self):
-        self.assertEqual(self.base.bblfsh_endpoint, "0.0.0.0:9432")
+        self.assertEqual(self.base.bblfsh_endpoint, resolve_bblfsh_endpoint(None))
 
     def test_bblfsh_error(self):
         def fake_bblfsh_parse(*args):
@@ -55,7 +58,7 @@ class Repo2BaseTests(unittest.TestCase):
             self.base._cloner._is_enry = False
 
     def test_timeout(self):
-        self.assertEqual(self.base.timeout, self.base.DEFAULT_BBLFSH_TIMEOUT)
+        self.assertEqual(self.base.timeout, resolve_bblfsh_timeout(None))
         self.base.timeout = 100500.1
         self.assertEqual(self.base.timeout, 100500.1)
         with self.assertRaises(TypeError):
@@ -84,6 +87,39 @@ class Repo2BaseTests(unittest.TestCase):
         self.assertEqual(self.base.overwrite_existing, True)
         with self.assertRaises(TypeError):
             self.base.threads = 1.5
+
+    def test_write_debug_logs(self):
+        save_logpath = self.base.PARSE_LOG_FILENAME
+        try:
+            with tempfile.NamedTemporaryFile() as f:
+                self.base.PARSE_LOG_FILENAME = f.name
+                with open(self.base.PARSE_LOG_FILENAME, "w") as f:
+                    f.write("Thread, lines, time, speed, status, path\n")
+                self.base._write_debug_logs(0, "test/file/path.txt", "OK", 10, 0)
+                self.base._write_debug_logs(1, "test/file/path2.txt", "OK", 20, 0)
+                with open(f.name) as fr:
+                    lines = fr.readlines()
+                self.assertEqual(len(lines), 3)
+                sline = lines[1].split(',')
+                self.assertEqual(sline[0].lstrip(" "), "0")
+                self.assertEqual(sline[1].lstrip(" "), "10")
+                self.assertEqual(sline[3].lstrip(" "), "0.00")
+                self.assertEqual(sline[4].lstrip(" "), "OK")
+                self.assertEqual(sline[5].lstrip(" "), "test/file/path.txt\n")
+                lines, time = parse_parse_logs(f.name)
+                self.assertEqual(lines, 30)
+        finally:
+            self.base.PARSE_LOG_FILENAME = save_logpath
+
+    def test_lines_count(self):
+        self.assertTrue(math.isnan(lines_count("wrong_filepath")))
+        with tempfile.NamedTemporaryFile() as f:
+            f.write(b"line1\n")
+            f.write(b"line2\n")
+            f.write(b"line3")
+            self.assertTrue(3, lines_count(f.name))
+            f.write(b"\n")
+            self.assertTrue(3, lines_count(f.name))
 
 
 class RepoTransformerTests(unittest.TestCase):
@@ -158,6 +194,40 @@ class EnsureBblfshIsRunningNoexcTest(unittest.TestCase):
         finally:
             logging.exception = exception_
             logging.warning = warning_
+
+    def test_resolve_bblfsh_endpoint(self):
+        environ_ = dict(os.environ)
+        try:
+            os.environ = {}
+            self.assertEqual(DEFAULT_BBLFSH_ENDPOINTS[0], resolve_bblfsh_endpoint(None))
+            self.assertEqual("172.17.0.1:9432", resolve_bblfsh_endpoint("172.17.0.1:9432"))
+            os.environ["BBLFSH_ENDPOINT"] = "192.168.0.1:9432"
+            self.assertEqual("192.168.0.1:9432", resolve_bblfsh_endpoint(None))
+            self.assertEqual("172.17.0.1:9432", resolve_bblfsh_endpoint("172.17.0.1:9432"))
+        finally:
+            os.environ = environ_
+
+    def test_resolve_bblfsh_timeout(self):
+        environ_ = dict(os.environ)
+        try:
+            os.environ = {}
+            self.assertEqual(DEFAULT_BBLFSH_TIMEOUT, resolve_bblfsh_timeout(None))
+            self.assertEqual(100, resolve_bblfsh_timeout(100))
+            os.environ["BBLFSH_TIMEOUT"] = "20"
+            self.assertEqual(20, resolve_bblfsh_timeout(None))
+            self.assertEqual(40, resolve_bblfsh_timeout(40))
+        finally:
+            os.environ = environ_
+
+    def test_resolve_parse_log_filename(self):
+        environ_ = dict(os.environ)
+        try:
+            os.environ = {}
+            self.assertEqual(resolve_parse_log_filename(), None)
+            os.environ["AST2VEC_PARSE_LOG"] = "file"
+            self.assertEqual(resolve_parse_log_filename(), "file")
+        finally:
+            os.environ = environ_
 
 
 if __name__ == "__main__":
