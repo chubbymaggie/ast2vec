@@ -19,7 +19,7 @@ class ToDocFreqBase(Model2Base):
     It is shared with :class:`Uast2DocFreq` and :class:`MergeDocFreq`.
     """
     def __init__(self, *args, **kwargs):
-        super(ToDocFreqBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self._df = defaultdict(int)
         self._docs = 0
 
@@ -41,7 +41,7 @@ class Uast2DocFreq(ToDocFreqBase):
     MODEL_TO_CLASS = DocumentFrequencies
 
     def __init__(self, *args, **kwargs):
-        super(Uast2DocFreq, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self._uast2bag = UastIds2Bag(None)
 
     def convert_model(self, model: Model) -> Union[Model, None]:
@@ -67,7 +67,7 @@ class MergeDocFreq(ToDocFreqBase):
         self._docs += model.docs
 
 
-def source2df_entry(args):
+def uast2df_entry(args):
     converter = Uast2DocFreq(num_processes=args.processes)
     with tempfile.TemporaryDirectory(dir=args.tmpdir, prefix="source2uast") as tmpdir:
         converter.convert(args.input, tmpdir, pattern=args.filter)

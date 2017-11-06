@@ -1,7 +1,10 @@
 from collections import defaultdict
 import logging
+import marshal
 import math
 import os
+import pickle
+import types
 
 import numpy
 from scipy.sparse import csr_matrix
@@ -48,13 +51,26 @@ class Uasts2BOW:
             del freqs[key]
         return dict(freqs)
 
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        if isinstance(self._getter, types.FunctionType) \
+                and self._getter.__name__ == (lambda: None).__name__:
+            assert self._getter.__closure__ is None
+            state["_getter"] = marshal.dumps(self._getter.__code__)
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__ = state
+        if isinstance(self._getter, bytes):
+            self._getter = types.FunctionType(marshal.loads(self._getter), globals())
+
 
 class UastModel2BOW(Model2Base):
     MODEL_FROM_CLASS = UASTModel
     MODEL_TO_CLASS = BOW
 
     def __init__(self, topn, docfreq, *args, **kwargs):
-        super(UastModel2BOW, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self._log.info("Choosing the vocabulary...")
         freqs = numpy.zeros(len(docfreq), dtype=int)
         vocabulary = [None] * len(docfreq)
@@ -82,8 +98,10 @@ class UastModel2BOW(Model2Base):
         return bow
 
 
-def source2bow_entry(args):
+def uast2bow_entry(args):
     df = DocumentFrequencies().load(args.docfreq)
+    if args.prune_df > 1:
+        df = df.prune(args.prune_df)
     os.makedirs(args.output, exist_ok=True)
     converter = UastModel2BOW(args.vocabulary_size, df, num_processes=args.processes,
                               overwrite_existing=args.overwrite_existing)
