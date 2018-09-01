@@ -6,19 +6,30 @@ services:
 cache:
   directories:
   - "$HOME/.cache/pip"
+stages:
+  - test
+  - name: deploy
+    # require any tag name to deploy
+    if: tag =~ .*
 addons:
   apt:
     packages:
-      - libboost-all-dev
-      - libxml2-dev
+      - libsnappy-dev
 _install: &_install
   - gimme 1.8
   - source ~/.gimme/envs/latest.env
   - pip install --upgrade pip
+  - pip install tensorflow
   - pip install -r requirements.txt codecov
   - pip install -e .
 _coverage: &_coverage
   - SCRIPT="coverage run --concurrency=multiprocessing -m unittest discover && coverage combine"
+_deploy: &_deploy
+  provider: script
+  script: twine upload dist/*py3-none-any* -u $PYPI_LOGIN -p $PYPI_PASS
+  skip_cleanup: true
+  on:
+    tags: true
 matrix:
   include:
     - python: 3.4
@@ -28,17 +39,27 @@ matrix:
       env: *_coverage
       install: *_install
     - python: 3.6
-      env: SCRIPT="pep8 --max-line-length=99 ."
-      install: pip install pep8
+      env: SCRIPT="flake8 . && (! grep -R /tmp sourced/ml/tests)"
+      install: pip install flake8
     - python: 3.6
       env: *_coverage
       install: *_install
       after_success:
         - codecov
+    - stage: deploy
+      python: 3.4
+      install:
+        - pip3 install --upgrade pip
+        - pip3 install twine
+      before_script: skip
+      script:
+        - python3 setup.py bdist_wheel
+      deploy: *_deploy
   fast_finish: true
 before_script:
-- BBLFSH_DRIVER_IMAGES="python=docker://bblfsh/python-driver:v0.8.2" docker run -d -e BBLFSH_DRIVER_IMAGES --privileged -p 9432:9432 --name bblfsh bblfsh/server:v0.7.0
+  - docker run -d --privileged -p 9432:9432 --name bblfshd bblfsh/bblfshd
+  - docker exec -it bblfshd bblfshctl driver install python bblfsh/python-driver
 script:
-- (eval "$SCRIPT")
+  - (eval "$SCRIPT")
 notifications:
   email: false

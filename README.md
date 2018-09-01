@@ -1,70 +1,71 @@
-# ast2vec [![Build Status](https://travis-ci.org/src-d/ast2vec.svg)](https://travis-ci.org/src-d/ast2vec) [![codecov](https://codecov.io/github/src-d/ast2vec/coverage.svg?branch=develop)](https://codecov.io/gh/src-d/ast2vec) [![PyPI](https://img.shields.io/pypi/v/ast2vec.svg)](https://pypi.python.org/pypi/ast2vec)
+# README
 
-Machine Learning models on top of Abstract Syntax Trees.
+This project is the foundation for [MLoSC](https://github.com/src-d/awesome-machine-learning-on-source-code) research and development. It abstracts feature extraction and training models, thus allowing to focus on the higher level tasks.
 
-Currently, there are implemented:
+Currently, the following models are implemented:
 
-* id2vec, source code identifier embeddings
-* docfreq, source code identifier document frequencies (part of TF-IDF)
-* nBOW, weighted bag of vectors, as in [src-d/wmd-relax](https://github.com/src-d/wmd-relax)
-* topic modeling
+* BOW - weighted bag of x, where x is many different extracted feature types.
+* id2vec, source code identifier embeddings.
+* docfreq, feature document frequencies \(part of TF-IDF\).
+* topic modeling over source code identifiers.
 
-This project can be the foundation for [MLoSC](https://github.com/src-d/awesome-machine-learning-on-source-code) research and development. It abstracts feature extraction and working with models, thus allowing to focus on the higher level tasks.
+It is written in Python3 and has been tested on Linux and macOS. source{d} ml is tightly coupled with [source{d} engine](https://engine.sourced.tech) and delegates all the feature extraction parallelization to it.
 
-It is written in Python3 and has been tested on Linux and macOS. ast2vec is tightly coupled with [Babelfish](http://doc.bblf.sh) and delegates all the AST parsing to it.
+Here is the list of proof-of-concept projects which are built using sourced.ml:
 
-Here is the list of projects which are built with ast2vec:
-
-* [vecino](https://github.com/src-d/vecino) - finding similar repositories
-* [tmsc](https://github.com/src-d/tmsc) - topic modeling of repositories
-* [role2vec](https://github.com/src-d/rol2vec) - AST node embedding and correction
-* [snippet-ranger](https://github.com/src-d/snippet-ranger) - topic modeling of source code snippets
+* [vecino](https://github.com/src-d/vecino) - finding similar repositories.
+* [tmsc](https://github.com/src-d/tmsc) - listing topics of a repository.
+* [snippet-ranger](https://github.com/src-d/snippet-ranger) - topic modeling of source code snippets.
+* [apollo](https://github.com/src-d/apollo) - source code deduplication at scale.
 
 ## Installation
 
-```
-pip3 install ast2vec
+### With Apache Spark included
+
+```text
+pip3 install sourced-ml
 ```
 
-You need to have `libxml2` installed. E.g., on Ubuntu `apt install libxml2-dev`.
+### Use existing Apache Spark
+
+If you already have Apache Spark installed and configured on your environment at `$APACHE_SPARK` you can re-use it and avoid downloading 200Mb through [pip "editable installs"](https://pip.pypa.io/en/stable/reference/pip_install/#editable-installs) by
+
+```text
+pip3 install -e "$SPARK_HOME/python"
+pip3 install sourced-ml
+```
+
+In both cases, you will need to have some native libraries installed. E.g., on Ubuntu `apt install libxml2-dev libsnappy-dev`. Some parts require [Tensorflow](https://tensorflow.org).
 
 ## Usage
 
 This project exposes two interfaces: API and command line. The command line is
 
+```text
+srcml --help
 ```
-ast2vec --help
-```
-
-There is an example of using Python API [here](Doc/how_to_use_ast2vec.ipynb).
-
-It exposes several tools to generate the models and setup the environment.
-
-API is divided into two domains: models and training. The first is about using while the second
-is about creating. Models: [Id2Vec](ast2vec/id2vec.py),
-[DocumentFrequencies](ast2vec/df.py), [NBOW](ast2vec/nbow.py), [Cooccurrences](ast2vec/coocc.py).
-Transformers (keras/sklearn style): [Repo2nBOWTransformer](ast2vec/repo2/nbow.py#L72),
-[Repo2CooccTransformer](ast2vec/repo2/coocc.py#L101),
-[PreprocessTransformer](ast2vec/id_embedding.py#L22),
-[SwivelTransformer](ast2vec/id_embedding.py#L218) and
-[PostprocessTransformer](ast2vec/id_embedding.py#L241).
 
 ## Docker image
 
-```
-docker build -t srcd/ast2vec .
-BBLFSH_DRIVER_IMAGES="python=docker://bblfsh/python-driver:v0.8.2;java=docker://bblfsh/java-driver:v0.6.0" docker run -e BBLFSH_DRIVER_IMAGES -d --privileged -p 9432:9432 --name bblfsh bblfsh/server:v0.7.0 --log-level DEBUG
-docker run -it --rm srcd/ast2vec --help
+```text
+docker run -it --rm srcd/ml --help
 ```
 
-If the first command fails with
+If this first command fails with
 
-```
+```text
 Cannot connect to the Docker daemon. Is the docker daemon running on this host?
 ```
 
-And you are sure that the daemon is running, then you need to add your user to `docker` group:
-refer to the [documentation](https://docs.docker.com/engine/installation/linux/linux-postinstall/#manage-docker-as-a-non-root-user).
+And you are sure that the daemon is running, then you need to add your user to `docker` group: refer to the [documentation](https://docs.docker.com/engine/installation/linux/linux-postinstall/#manage-docker-as-a-non-root-user).
+
+## Contributions
+
+...are welcome! See [CONTRIBUTING](contributing.md) and [CODE\_OF\_CONDUCT.md](code_of_conduct.md).
+
+## License
+
+[Apache 2.0](license.md)
 
 ## Algorithms
 
@@ -72,55 +73,38 @@ refer to the [documentation](https://docs.docker.com/engine/installation/linux/l
 
 We build the source code identifier co-occurrence matrix for every repository.
 
+1. Read Git repositories.
+2. Classify files using [enry](https://github.com/src-d/enry).
+3. Extract [UAST](https://doc.bblf.sh/uast/specification.html) from each supported file.
+4. [Split and stem](https://github.com/src-d/ml/tree/d1f13d079f57caa6338bb7eb8acb9062e011eda9/sourced/ml/algorithms/token_parser.py) all the identifiers in each tree.
+5. [Traverse UAST](https://github.com/src-d/ml/tree/d1f13d079f57caa6338bb7eb8acb9062e011eda9/sourced/ml/transformers/coocc.py), collapse all non-identifier paths and record all
+
+   identifiers on the same level as co-occurring. Besides, connect them with their immediate parents.
+
+6. Write the global co-occurrence matrix.
+7. Train the embeddings using [Swivel](https://github.com/src-d/ml/tree/d1f13d079f57caa6338bb7eb8acb9062e011eda9/sourced/ml/algorithms/swivel.py) \(requires Tensorflow\). Interactively view
+
+   the intermediate results in Tensorboard using `--logs`.
+
+8. Write the identifier embeddings model.
+
+1-5 is performed with `repos2coocc` command, 6 with `id2vec_preproc`, 7 with `id2vec_train`, 8 with `id2vec_postproc`.
+
+#### Weighted Bag of X
+
+We represent every repository as a weighted bag-of-vectors, provided by we've got document frequencies \("docfreq"\) and identifier embeddings \("id2vec"\).
+
 1. Clone or read the repository from disk.
 2. Classify files using [enry](https://github.com/src-d/enry).
 3. Extract [UAST](https://doc.bblf.sh/uast/specification.html) from each supported file.
-4. [Split and stem](ast2vec/repo2/base.py#L160) all the identifiers in each tree.
-5. [Traverse UAST](ast2vec/repo2/coocc.py#L86), collapse all non-identifier paths and record all
-identifiers on the same level as co-occurring. Besides, connect them with their immediate parents.
-6. Write the individual co-occurrence matrices.
-7. [Merge](ast2vec/id_embedding.py#L50) co-occurrence matrices from all repositories. Write the
-document frequencies model.
-8. Train the embeddings using [Swivel](ast2vec/swivel.py) running on Tensorflow. Interactively view
-the intermediate results in Tensorboard using `--logs`.
-9. Write the identifier embeddings model.
-10. Publish generated models to the Google Cloud Storage.
+4. Extract various features from each tree, e.g. identifiers, literals or node2vec-like structural fingerprints.
+5. Group by repository, file or function.
+6. Set the weight of each such feature according to TF-IDF.
+7. Write the BOW model.
 
-1-6 is performed with `repo2coocc` tool / `Repo2CooccTransformer` class,
-7 with `id2vec_preproc` / `id_embedding.PreprocessTransformer`, 8 with `id2vec_train` / `id_embedding.SwivelTransformer`,
-9 with `id2vec_postproc` / `id_embedding.PostprocessTransformer` and 10 with `publish`.
-
-#### Weighted Bag of Vectors
-
-We represent every repository as a weighted bag-of-vectors, provided by we've got document
-frequencies ("docfreq") and identifier embeddings ("id2vec").
-
-1. Clone or read the repository from disk.
-2. Classify files using [enry](https://github.com/src-d/enry).
-3. Extract [UAST](https://doc.bblf.sh/uast/specification.html) from each supported file.
-4. [Split and stem](ast2vec/repo2/base.py#L160) all the identifiers in each tree.
-5. Leave only those identifiers which are present in "docfreq" and "id2vec".
-6. Set the weight of each such identifier as TF-IDF.
-7. Set the value of each such identifier as the corresponding embedding vector.
-8. Write the nBOW model.
-9. Publish it to the Google Cloud Storage.
-
-1-8 is performed with `repo2nbow` tool / `Repo2nBOWTransformer` class and 9 with `publish`.
+1-7 are performed with `repos2bow` command.
 
 #### Topic modeling
 
-See [here](topic_modeling.md).
+See [here](doc/topic_modeling.md).
 
-## Contributions
-[![PEP8](https://img.shields.io/badge/code%20style-pep8-orange.svg)](https://www.python.org/dev/peps/pep-0008/)
-
-We use [PEP8](https://www.python.org/dev/peps/pep-0008/) with line length 99 and ". All the tests
-must pass:
-
-```
-unittest discover /path/to/ast2vec
-```
-
-## License
-
-Apache 2.0.
